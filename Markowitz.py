@@ -62,7 +62,14 @@ class EqualWeightPortfolio:
         """
         TODO: Complete Task 1 Below
         """
-
+        if len(assets) > 0:
+            equal_weight = 1.0 / len(assets)
+            for item in assets:
+                self.portfolio_weights[item] = equal_weight
+            self.portfolio_weights[self.exclude] = 0.0
+        else:
+            for item in assets:
+                self.portfolio_weights[item] = 0.0
         """
         TODO: Complete Task 1 Above
         """
@@ -113,7 +120,15 @@ class RiskParityPortfolio:
         """
         TODO: Complete Task 2 Below
         """
-
+        for i in range(self.lookback + 1, len(df)):
+            R_n = df_returns.copy()[assets].iloc[i - self.lookback : i]
+            Sigma = R_n.cov().values
+            inv_vol = 1 / np.sqrt(np.diag(Sigma))
+            weights = inv_vol / np.sum(inv_vol)
+            #print(weights)
+            for j, asset in enumerate(assets):
+                self.portfolio_weights.loc[df.index[i], asset] = weights[j]
+            self.portfolio_weights.loc[df.index[i], self.exclude] = 0.0
 
 
         """
@@ -190,14 +205,14 @@ class MeanVariancePortfolio:
 
                 # Sample Code: Initialize Decision w and the Objective
                 # NOTE: You can modify the following code
-                w = model.addMVar(n, name="w", ub=1)
-                model.setObjective(w.sum(), gp.GRB.MAXIMIZE)
-
+                w = model.addMVar(n, name="w", lb=0.0)
+                model.setObjective(w @ mu - gamma / 2.0 * w @ Sigma @ w, gp.GRB.MAXIMIZE)
+                model.addConstr(w.sum() == 1, name="budget")
                 """
                 TODO: Complete Task 3 Above
                 """
                 model.optimize()
-
+                
                 # Check if the status is INF_OR_UNBD (code 4)
                 if model.status == gp.GRB.INF_OR_UNBD:
                     print(
@@ -215,9 +230,8 @@ class MeanVariancePortfolio:
                     solution = []
                     for i in range(n):
                         var = model.getVarByName(f"w[{i}]")
-                        # print(f"w {i} = {var.X}")
+                        #print(f"w {i} = {var.X}")
                         solution.append(var.X)
-
         return solution
 
     def calculate_portfolio_returns(self):

@@ -51,7 +51,7 @@ class MyPortfolio:
     NOTE: You can modify the initialization function
     """
 
-    def __init__(self, price, exclude, lookback=50, gamma=0):
+    def __init__(self, price, exclude, lookback=126, gamma=100):
         self.price = price
         self.returns = price.pct_change().fillna(0)
         self.exclude = exclude
@@ -61,17 +61,86 @@ class MyPortfolio:
     def calculate_weights(self):
         # Get the assets by excluding the specified column
         assets = self.price.columns[self.price.columns != self.exclude]
-
+        n = len(assets)
+        gamma = self.gamma
         # Calculate the portfolio weights
         self.portfolio_weights = pd.DataFrame(
             index=self.price.index, columns=self.price.columns
         )
-
+        self.portfolio_weights.fillna(0, inplace=True)
+        if self.exclude in self.portfolio_weights.columns:
+            self.portfolio_weights[self.exclude] = 0.0
         """
         TODO: Complete Task 4 Below
         """
-        
-        
+        SMA_FILTER = 200    
+        MOM_LOOKBACK = 126  
+        VOL_LOOKBACK = 20   
+        TOP_N = 3           
+
+
+        spy_price = self.price['SPY']
+        spy_ma200 = spy_price.rolling(window=SMA_FILTER).mean().shift(1)
+
+
+        start_index = max(SMA_FILTER, MOM_LOOKBACK)
+
+        n_assets = len(assets)
+        self.portfolio_weights.iloc[:start_index, self.portfolio_weights.columns.isin(assets)] = 1.0 / n_assets
+
+        for t in range(start_index, len(self.price.index)):
+            current_date = self.price.index[t]
+            
+
+            current_spy = spy_price.iloc[t-1]
+            current_ma = spy_ma200.iloc[t-1]
+            
+            is_bull_market = current_spy > current_ma
+
+            price_now = self.price.iloc[t-1][assets]
+            price_prev = self.price.iloc[t-MOM_LOOKBACK][assets]
+            momentum = (price_now / price_prev) - 1
+            
+            vol_window = self.returns.iloc[t-VOL_LOOKBACK : t][assets]
+            volatility = vol_window.std() * np.sqrt(252) # 年化
+            volatility[volatility == 0] = 1e-6
+
+
+            efficiency = momentum / volatility
+
+            target_assets = []
+            weights_series = pd.Series(0.0, index=assets)
+
+            if is_bull_market:
+
+                
+                top_performers = efficiency.nlargest(TOP_N)
+
+                target_assets = top_performers[top_performers > 0].index
+                
+                if len(target_assets) == 0:
+
+                    target_assets = volatility.nsmallest(TOP_N).index
+            
+            else:
+
+                target_assets = volatility.nsmallest(TOP_N).index
+
+            if len(target_assets) > 0:
+                if is_bull_market:
+                    score = efficiency[target_assets]
+                    total_score = score.sum()
+                    if total_score > 0:
+                        weights_series[target_assets] = score / total_score
+                    else:
+                        weights_series[target_assets] = 1.0 / len(target_assets)
+                else:
+                    inv_vol = 1.0 / volatility[target_assets]
+                    weights_series[target_assets] = inv_vol / inv_vol.sum()
+            else:
+                weights_series[assets] = 1.0 / n_assets
+
+            self.portfolio_weights.loc[current_date, assets] = weights_series.values
         """
         TODO: Complete Task 4 Above
         """

@@ -150,4 +150,3 @@ class AssignmentJudge:
             if "mp" in args.cumulative:
                 self.cumulative_product(df)
             if "bmp" in args.cumulative:
-                self.cumulative_product(Bdf)
